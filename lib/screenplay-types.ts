@@ -12,6 +12,7 @@ export type ProcessingStatus =
   | "failed";
 
 export type ProcessingSummary = {
+  project_id?: string;
   language: string;
   language_code: string | null;
   structure_type: string;

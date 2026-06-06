@@ -2,36 +2,29 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import OnboardingClient from "./onboarding-client";
 
-type OnboardingPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
+export default async function OnboardingPage() {
   const session = await auth();
-  const params = await searchParams;
-  const emailParam = typeof params.email === "string" ? params.email : "";
-  const nameParam = typeof params.name === "string" ? params.name : "";
-  const resolvedEmail = session?.user?.email ?? emailParam;
+  const backendAccessToken = (session as typeof session & { backendAccessToken?: string } | null)
+    ?.backendAccessToken;
+  const resolvedEmail = session?.user?.email ?? "";
 
-  if (!resolvedEmail) {
+  if (!resolvedEmail || !backendAccessToken) {
     redirect("/signin");
   }
 
   const apiBaseUrl = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8000";
   let shouldRedirectToDashboard = false;
-  let dashboardName = nameParam;
   let backendError = "";
 
   try {
-    const response = await fetch(
-      `${apiBaseUrl}/api/auth/dashboard?email=${encodeURIComponent(resolvedEmail)}`,
-      { cache: "no-store" },
-    );
+    const response = await fetch(`${apiBaseUrl}/api/auth/dashboard`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${backendAccessToken}` },
+    });
     if (response.ok) {
-      const data = (await response.json()) as { onboarding_required: boolean; name: string };
+      const data = (await response.json()) as { onboarding_required: boolean };
       if (!data.onboarding_required) {
         shouldRedirectToDashboard = true;
-        dashboardName = data.name ?? nameParam;
       }
     } else if (response.status !== 404) {
       backendError = "We could not fetch your saved profile from the database. Please try again after the backend is available.";
@@ -41,9 +34,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   if (shouldRedirectToDashboard) {
-    redirect(
-      `/dashboard?email=${encodeURIComponent(resolvedEmail)}&name=${encodeURIComponent(dashboardName)}`,
-    );
+    redirect("/dashboard");
   }
 
   if (backendError) {
@@ -59,7 +50,8 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
   return (
     <OnboardingClient
-      initialName={session?.user?.name ?? nameParam}
+      backendAccessToken={backendAccessToken}
+      initialName={session?.user?.name ?? ""}
       initialEmail={resolvedEmail}
       initialImage={session?.user?.image ?? ""}
     />

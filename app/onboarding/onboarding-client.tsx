@@ -5,6 +5,7 @@ import { CheckCircle2, Clapperboard, FileUp, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Props = {
+  backendAccessToken: string;
   initialName: string;
   initialEmail: string;
   initialImage: string;
@@ -12,17 +13,22 @@ type Props = {
 
 const languages = ["Malayalam", "English", "Hindi", "Tamil", "Telugu"];
 
-export default function OnboardingClient({ initialName, initialEmail, initialImage }: Props) {
+export default function OnboardingClient({
+  backendAccessToken,
+  initialName,
+  initialEmail,
+  initialImage,
+}: Props) {
   const router = useRouter();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  const authHeaders = { Authorization: `Bearer ${backendAccessToken}` };
   const [step, setStep] = useState(1);
   const [savedProfile, setSavedProfile] = useState(false);
   const [name, setName] = useState(initialName);
-  const [email, setEmail] = useState(initialEmail);
+  const [email] = useState(initialEmail);
   const [projectName, setProjectName] = useState("");
   const [language, setLanguage] = useState("Malayalam");
   const [projectId, setProjectId] = useState("");
-  const [uploadedFileName, setUploadedFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,7 +38,7 @@ export default function OnboardingClient({ initialName, initialEmail, initialIma
     try {
       const res = await fetch(`${apiBaseUrl}/api/auth/profile`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ name, email, onboarding_completed: true }),
       });
       if (!res.ok) {
@@ -54,8 +60,8 @@ export default function OnboardingClient({ initialName, initialEmail, initialIma
     try {
       const res = await fetch(`${apiBaseUrl}/api/projects`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner_email: email, title: projectName, language }),
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ title: projectName, language }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -63,36 +69,7 @@ export default function OnboardingClient({ initialName, initialEmail, initialIma
       }
       const data = (await res.json()) as { id: string };
       setProjectId(data.id);
-      setStep(3);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unexpected error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const uploadScript = async (file: File | null) => {
-    if (!file || !projectId) return;
-
-    setBusy(true);
-    setError("");
-    try {
-      const formData = new FormData();
-      formData.append("project_id", projectId);
-      formData.append("language", language);
-      formData.append("file", file);
-
-      const res = await fetch(`${apiBaseUrl}/api/screenplays/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail ?? "Failed to upload script");
-      }
-
-      setUploadedFileName(file.name);
+      router.push("/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error");
     } finally {
@@ -140,7 +117,7 @@ export default function OnboardingClient({ initialName, initialEmail, initialIma
               </div>
               <div>
                 <label className="mb-2 block text-sm text-[#A0A0A0]" htmlFor="email">Email</label>
-                <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-[#FFC107]" />
+                <input id="email" value={email} readOnly className="w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-[#A0A0A0] outline-none" />
               </div>
             </div>
 
@@ -169,50 +146,8 @@ export default function OnboardingClient({ initialName, initialEmail, initialIma
             </div>
 
             <button disabled={busy} onClick={createProject} className="mt-6 rounded-md bg-[#FFC107] px-5 py-2.5 font-semibold text-black hover:brightness-110 disabled:opacity-60">
-              Create Project
+              {busy ? "Creating..." : "Create Project"}
             </button>
-          </section>
-        )}
-
-        {step === 3 && (
-          <section className="rounded-xl border border-white/10 bg-[#1A1A1A] p-6">
-            <div className="mb-4 flex items-center gap-2 text-[#FFC107]">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-medium">Project created successfully</span>
-            </div>
-            <h2 className="text-xl font-semibold">Upload Script</h2>
-            <p className="mt-2 text-sm text-[#A0A0A0]">Next step: upload your screenplay and start AI breakdown.</p>
-
-            <label className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-md bg-[#FFC107] px-5 py-2.5 font-semibold text-black hover:brightness-110">
-              <FileUp className="h-4 w-4" />
-              {busy ? "Uploading..." : "Upload Script"}
-              <input
-                type="file"
-                accept=".pdf,.txt,.doc,.docx,.fountain"
-                className="hidden"
-                onChange={(e) => uploadScript(e.target.files?.[0] ?? null)}
-              />
-            </label>
-
-            {uploadedFileName ? (
-              <div className="mt-3 space-y-3">
-                <p className="text-sm text-green-400">Uploaded: {uploadedFileName}</p>
-                <button
-                  className="rounded-md border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium hover:bg-white/10"
-                  onClick={() =>
-                    router.push(
-                      `/dashboard?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`,
-                    )
-                  }
-                >
-                  Go to Dashboard
-                </button>
-              </div>
-            ) : null}
-
-            <p className="mt-4 text-xs text-[#A0A0A0]">
-              Profile saved: {savedProfile ? "Yes" : "No"} | Project: {projectName || "Untitled"} ({language})
-            </p>
           </section>
         )}
         {error ? <p className="text-sm text-red-400">{error}</p> : null}

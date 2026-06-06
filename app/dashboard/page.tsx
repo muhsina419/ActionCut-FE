@@ -3,10 +3,6 @@ import { redirect } from "next/navigation";
 import DashboardClient from "./dashboard-client";
 import type { ProcessingStatus } from "@/lib/screenplay-types";
 
-type DashboardPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
 type ScreenplaySummary = {
   id: string;
   title: string;
@@ -40,25 +36,24 @@ type DashboardResponse = {
   projects: ProjectSummary[];
 };
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage() {
   const session = await auth();
-  const params = await searchParams;
-  const emailParam = typeof params.email === "string" ? params.email : "";
-  const resolvedEmail = session?.user?.email ?? emailParam;
+  const backendAccessToken = (session as typeof session & { backendAccessToken?: string } | null)
+    ?.backendAccessToken;
 
-  if (!resolvedEmail) {
+  if (!session?.user?.email || !backendAccessToken) {
     redirect("/signin");
   }
 
   const apiBaseUrl = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8000";
-  const response = await fetch(
-    `${apiBaseUrl}/api/auth/dashboard?email=${encodeURIComponent(resolvedEmail)}`,
-    { cache: "no-store" },
-  );
+  const response = await fetch(`${apiBaseUrl}/api/auth/dashboard`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${backendAccessToken}` },
+  });
 
   if (!response.ok) {
     if (response.status === 404) {
-      redirect(`/onboarding?email=${encodeURIComponent(resolvedEmail)}`);
+      redirect("/onboarding");
     }
 
     return (
@@ -77,8 +72,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const data = (await response.json()) as DashboardResponse;
 
   if (data.onboarding_required) {
-    redirect(`/onboarding?email=${encodeURIComponent(data.email)}&name=${encodeURIComponent(data.name)}`);
+    redirect("/onboarding");
   }
 
-  return <DashboardClient initialData={data} />;
+  return <DashboardClient backendAccessToken={backendAccessToken} initialData={data} />;
 }

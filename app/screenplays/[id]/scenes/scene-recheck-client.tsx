@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import type { Scene, SceneListResponse } from "@/lib/screenplay-types";
 
 type Props = {
+  backendAccessToken: string;
   initialData: SceneListResponse;
 };
 
-export default function SceneRecheckClient({ initialData }: Props) {
+export default function SceneRecheckClient({ backendAccessToken, initialData }: Props) {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  const authHeaders = { Authorization: `Bearer ${backendAccessToken}` };
   const [scenes, setScenes] = useState<Scene[]>(initialData.scenes);
   const [totalScenes, setTotalScenes] = useState<number>(initialData.total_scenes);
   const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
@@ -58,7 +60,7 @@ export default function SceneRecheckClient({ initialData }: Props) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/screenplays/${initialData.script_id}/scenes/${scene.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ heading: scene.heading, content: scene.content }),
       });
 
@@ -85,6 +87,7 @@ export default function SceneRecheckClient({ initialData }: Props) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/screenplays/${initialData.script_id}/scenes/${sceneId}`, {
         method: "DELETE",
+        headers: authHeaders,
       });
 
       if (!response.ok) {
@@ -110,7 +113,7 @@ export default function SceneRecheckClient({ initialData }: Props) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/screenplays/${initialData.script_id}/scenes/merge`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ scene_ids: selectedSceneIds }),
       });
 
@@ -136,7 +139,7 @@ export default function SceneRecheckClient({ initialData }: Props) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/screenplays/${initialData.script_id}/scenes/corrections`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           total_scenes: totalScenes,
           scenes: scenes.map((scene, index) => ({
