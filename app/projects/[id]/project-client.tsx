@@ -435,17 +435,23 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
               </div>
 
               {!project.is_archived && (
-                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#FFC107] px-6 py-2.5 text-sm font-semibold text-black transition hover:brightness-110">
-                  <FileUp className="h-4 w-4" />
-                  Upload New Script
-                  <input
-                    type="file"
-                    accept=".pdf,.txt,.docx"
-                    className="hidden"
-                    onChange={(e) => uploadScriptToProject(e.target.files?.[0] ?? null)}
-                    disabled={!!busyLabel}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <Link href={`/projects/${project.id}/breakdown`} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#1A1A1A] border border-[#FFC107]/50 px-6 py-2.5 text-sm font-semibold text-[#FFC107] transition hover:bg-[#FFC107]/10">
+                    <FileText className="h-4 w-4" />
+                    Breakdown Dashboard
+                  </Link>
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#FFC107] px-6 py-2.5 text-sm font-semibold text-black transition hover:brightness-110">
+                    <FileUp className="h-4 w-4" />
+                    Upload New Script
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.docx"
+                      className="hidden"
+                      onChange={(e) => uploadScriptToProject(e.target.files?.[0] ?? null)}
+                      disabled={!!busyLabel}
+                    />
+                  </label>
+                </div>
               )}
             </div>
           </section>

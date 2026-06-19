@@ -7,6 +7,8 @@ export type ProcessingStatus =
   | "full_ocr"
   | "gemini_ocr"
   | "scene_detection"
+  | "character_detection"
+  | "location_detection"
   | "completed"
   | "corrected"
   | "failed";
@@ -20,6 +22,11 @@ export type ProcessingSummary = {
   processing_status: ProcessingStatus;
   processing_progress: number;
   processing_message: string | null;
+  scene_count: number;
+  character_count: number;
+  location_count: number;
+  characters?: string[];
+  locations?: string[];
 };
 
 export type Scene = {
@@ -36,3 +43,9 @@ export type SceneListResponse = {
   total_scenes: number;
   scenes: Scene[];
 };
+
+export type MetadataUpdateRequest = {
+  characters?: string[];
+  locations?: string[];
+};
+

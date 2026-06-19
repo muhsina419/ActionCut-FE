@@ -1,13 +1,116 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ArrowLeft, Save, Plus, Edit2, Trash2, Check, X } from "lucide-react";
+import { ArrowLeft, Save, Plus, Edit2, Trash2, Check, X, ChevronDown, ChevronUp, Users, MapPin, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { toast, Toaster } from "sonner";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import type { ProcessingSummary, Scene, SceneListResponse } from "@/lib/screenplay-types";
+import { SceneBreakdownView } from "./scene-breakdown-view";
+
+function EditableTagList({
+  items,
+  originalItems,
+  onChange,
+  onSave,
+  isSaving,
+  colorScheme
+}: {
+  items: string[];
+  originalItems: string[];
+  onChange: (newItems: string[]) => void;
+  onSave: () => void;
+  isSaving: boolean;
+  colorScheme: "blue" | "green";
+}) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingVal, setEditingVal] = useState("");
+  const [newItem, setNewItem] = useState("");
+
+  const colorClasses = colorScheme === "blue" 
+    ? "bg-blue-500/10 text-blue-400 border-blue-500/20" 
+    : "bg-green-500/10 text-green-400 border-green-500/20";
+
+  const focusRing = colorScheme === "blue" ? "focus:border-blue-500/50" : "focus:border-green-500/50";
+
+  const handleEdit = (idx: number) => {
+    setEditingIdx(idx);
+    setEditingVal(items[idx]);
+  };
+
+  const saveEdit = (idx: number) => {
+    if (editingVal.trim()) {
+      const next = [...items];
+      next[idx] = editingVal.trim();
+      onChange(next);
+    }
+    setEditingIdx(null);
+  };
+
+  const remove = (idx: number) => {
+    const next = [...items];
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
+  const add = () => {
+    if (newItem.trim() && !items.includes(newItem.trim())) {
+      onChange([...items, newItem.trim()]);
+      setNewItem("");
+    }
+  };
+
+  const hasChanges = JSON.stringify(items) !== JSON.stringify(originalItems);
+  const handleUndo = () => onChange([...originalItems]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+        <input 
+          value={newItem}
+          onChange={e => setNewItem(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="Add new..."
+          className={`flex-1 bg-black/40 border border-white/10 rounded px-3 py-1.5 text-sm outline-none text-white ${focusRing}`}
+        />
+        <Button size="sm" variant="secondary" onClick={add} className="h-8 bg-white/10 hover:bg-white/20 text-white border-0">Add</Button>
+        {hasChanges && (
+          <Button size="sm" variant="ghost" onClick={handleUndo} className="h-8 px-2 text-[#AAB4BF] hover:text-white" title="Undo changes">
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        )}
+        <Button size="sm" className="h-8 bg-[#FFC107] text-black hover:brightness-110" onClick={onSave} disabled={isSaving || !hasChanges}>
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {isSaving ? "Saving..." : "Save"}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, idx) => (
+          <div key={idx} className={`flex items-center gap-1 rounded border px-2.5 py-1 text-xs ${colorClasses}`}>
+            {editingIdx === idx ? (
+              <input
+                autoFocus
+                value={editingVal}
+                onChange={e => setEditingVal(e.target.value)}
+                onBlur={() => saveEdit(idx)}
+                onKeyDown={e => { if (e.key === 'Enter') saveEdit(idx); if (e.key === 'Escape') setEditingIdx(null); }}
+                className="bg-transparent outline-none w-24 text-inherit"
+              />
+            ) : (
+              <span className="cursor-pointer" onClick={() => handleEdit(idx)}>{item}</span>
+            )}
+            <button onClick={() => remove(idx)} className="ml-1 opacity-50 hover:opacity-100">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-xs text-[#AAB4BF]/60 italic">None detected</p>}
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   backendAccessToken: string;
@@ -21,16 +124,58 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
   const authHeaders = { Authorization: `Bearer ${backendAccessToken}` };
 
-  const [summary] = useState<ProcessingSummary>(initialSummary);
+  const [summary, setSummary] = useState<ProcessingSummary>(initialSummary);
   const [scenes, setScenes] = useState<Scene[]>(initialScenesData.scenes);
   const [busy, setBusy] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const [showCharactersPanel, setShowCharactersPanel] = useState(false);
+  const [showLocationsPanel, setShowLocationsPanel] = useState(false);
+
+  const [characters, setCharacters] = useState<string[]>(initialSummary.characters || []);
+  const [locations, setLocations] = useState<string[]>(initialSummary.locations || []);
+  const [savingCharacters, setSavingCharacters] = useState(false);
+  const [savingLocations, setSavingLocations] = useState(false);
 
   // Keep track of which scenes are currently being edited
   const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
   const [editValues, setEditValues] = useState<Record<string, { heading: string; content: string }>>({});
 
   const totalScenes = scenes.length;
+
+  const saveMetadata = async (type: "characters" | "locations", data: string[]) => {
+    const isChar = type === "characters";
+    const setSaving = isChar ? setSavingCharacters : setSavingLocations;
+    setSaving(true);
+    toast.loading(`Saving ${type}...`, { id: `save-${type}` });
+    try {
+      const payload = isChar ? { characters: data } : { locations: data };
+      const response = await fetch(`${apiBaseUrl}/api/screenplays/${scriptId}/metadata`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? `Failed to save ${type}`);
+      }
+
+      const updatedData = await response.json() as ProcessingSummary;
+      setSummary(updatedData);
+      if (isChar) {
+        setCharacters(updatedData.characters || []);
+      } else {
+        setLocations(updatedData.locations || []);
+      }
+
+      toast.success(`${type === "characters" ? "Characters" : "Locations"} saved successfully`, { id: `save-${type}` });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `Failed to save ${type}`, { id: `save-${type}` });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const labelForStructure = (value: string) =>
     value
@@ -218,6 +363,84 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
         {/* Main Content (Scene Editor) */}
         <section className="flex-1 w-full space-y-4">
           
+          {/* Summary Card */}
+          <div className="rounded-xl border border-white/10 bg-[#1A1D21] p-6 shadow-md">
+            <h2 className="text-xl font-bold text-white mb-4">Screenplay Overview</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Language</p>
+                <p className="text-lg font-bold text-white mt-1">{summary.language}</p>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Scenes</p>
+                <p className="text-lg font-bold text-[#FFC107] mt-1">{summary.scene_count ?? totalScenes}</p>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Characters</p>
+                <p className="text-lg font-bold text-blue-400 mt-1">{summary.character_count ?? 0}</p>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Locations</p>
+                <p className="text-lg font-bold text-green-400 mt-1">{summary.location_count ?? 0}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Optional Review Panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Characters Panel */}
+            <div className="rounded-xl border border-white/10 bg-[#1A1D21] overflow-hidden">
+              <button
+                onClick={() => setShowCharactersPanel(!showCharactersPanel)}
+                className="w-full flex items-center justify-between p-4 text-left text-sm font-semibold text-white hover:bg-white/5 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-blue-400" />
+                  Review Characters ({summary.character_count ?? 0})
+                </span>
+                {showCharactersPanel ? <ChevronUp className="h-4 w-4 text-[#AAB4BF]" /> : <ChevronDown className="h-4 w-4 text-[#AAB4BF]" />}
+              </button>
+              {showCharactersPanel && (
+                <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
+                  <EditableTagList
+                    items={characters}
+                    originalItems={summary.characters || []}
+                    onChange={setCharacters}
+                    onSave={() => saveMetadata("characters", characters)}
+                    isSaving={savingCharacters}
+                    colorScheme="blue"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Locations Panel */}
+            <div className="rounded-xl border border-white/10 bg-[#1A1D21] overflow-hidden">
+              <button
+                onClick={() => setShowLocationsPanel(!showLocationsPanel)}
+                className="w-full flex items-center justify-between p-4 text-left text-sm font-semibold text-white hover:bg-white/5 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-green-400" />
+                  Review Locations ({summary.location_count ?? 0})
+                </span>
+                {showLocationsPanel ? <ChevronUp className="h-4 w-4 text-[#AAB4BF]" /> : <ChevronDown className="h-4 w-4 text-[#AAB4BF]" />}
+              </button>
+              {showLocationsPanel && (
+                <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
+                  <EditableTagList
+                    items={locations}
+                    originalItems={summary.locations || []}
+                    onChange={setLocations}
+                    onSave={() => saveMetadata("locations", locations)}
+                    isSaving={savingLocations}
+                    colorScheme="green"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="relative group">
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
               <Button size="sm" onClick={() => addNewScene(0)} className="rounded-full shadow-lg bg-[#2A2E33] hover:bg-[#3A3E43] text-white border border-white/10">
@@ -283,6 +506,7 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
                         <div className="whitespace-pre-wrap text-[#C8D1D9] leading-relaxed">
                           {scene.content || <span className="italic opacity-50">Empty scene</span>}
                         </div>
+                        <SceneBreakdownView sceneId={scene.id} apiBaseUrl={apiBaseUrl} accessToken={backendAccessToken} />
                       </div>
                       
                       <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
