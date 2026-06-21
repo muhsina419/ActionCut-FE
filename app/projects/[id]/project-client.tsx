@@ -61,6 +61,9 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   
+  // Script Menu State
+  const [openScriptMenuId, setOpenScriptMenuId] = useState<string | null>(null);
+  
   // Rename State
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -70,6 +73,11 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
+      }
+      // Close script menu if clicking outside
+      const target = event.target as HTMLElement;
+      if (!target.closest('.script-menu-container')) {
+        setOpenScriptMenuId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -436,10 +444,6 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
 
               {!project.is_archived && (
                 <div className="flex gap-2">
-                  <Link href={`/projects/${project.id}/breakdown`} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#1A1A1A] border border-[#FFC107]/50 px-6 py-2.5 text-sm font-semibold text-[#FFC107] transition hover:bg-[#FFC107]/10">
-                    <FileText className="h-4 w-4" />
-                    Breakdown Dashboard
-                  </Link>
                   <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#FFC107] px-6 py-2.5 text-sm font-semibold text-black transition hover:brightness-110">
                     <FileUp className="h-4 w-4" />
                     Upload New Script
@@ -507,33 +511,82 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                           </Button>
                         )}
                         
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busyScreenplayId === screenplay.id}
-                          onClick={() => setConfirmAction({
-                            type: "reprocess-script",
-                            screenplayId: screenplay.id,
-                            title: screenplay.title,
-                          })}
-                          className="border-white/20 hover:bg-white/10"
-                        >
-                          <RotateCcw className="mr-2 h-4 w-4" /> Re-Process
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={busyScreenplayId === screenplay.id}
-                          onClick={() => setConfirmAction({
-                            type: "delete-script",
-                            screenplayId: screenplay.id,
-                            title: screenplay.title,
-                          })}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            disabled={busyScreenplayId === screenplay.id}
+                            onClick={() => setConfirmAction({
+                              type: "delete-script",
+                              screenplayId: screenplay.id,
+                              title: screenplay.title,
+                            })}
+                            className="h-9 w-9"
+                            title="Delete Script"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+
+                          <div className="relative script-menu-container">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenScriptMenuId(openScriptMenuId === screenplay.id ? null : screenplay.id);
+                              }}
+                              className="h-9 w-9 border-white/20 hover:bg-white/10"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                            
+                            {openScriptMenuId === screenplay.id && (
+                              <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-md border border-white/10 bg-[#1A1A1A] py-1 shadow-lg z-50">
+                                <button
+                                  onClick={() => router.push(`/screenplays/${screenplay.id}/scenes`)}
+                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                                >
+                                  Script Development
+                                </button>
+                                <button
+                                  onClick={() => toast.info("Pre-production Planning is coming soon!")}
+                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                                >
+                                  Pre-production Planning
+                                </button>
+                                <button
+                                  onClick={() => toast.info("Budget Estimation is coming soon!")}
+                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                                >
+                                  Budget Estimation
+                                </button>
+                                <button
+                                  onClick={() => toast.info("Creative Analysis is coming soon!")}
+                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                                >
+                                  Creative Analysis
+                                </button>
+                                <div className="my-1 h-px bg-white/10" />
+                                <button
+                                  disabled={busyScreenplayId === screenplay.id}
+                                  onClick={() => {
+                                    setOpenScriptMenuId(null);
+                                    setConfirmAction({
+                                      type: "reprocess-script",
+                                      screenplayId: screenplay.id,
+                                      title: screenplay.title,
+                                    });
+                                  }}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white disabled:opacity-50"
+                                >
+                                  <RotateCcw className="h-4 w-4" /> Re-Process Script
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
