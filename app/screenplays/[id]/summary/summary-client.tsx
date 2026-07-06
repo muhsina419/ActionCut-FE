@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowLeft, Download, FileText, Users, MapPin, Film } from "lucide-react";
 import Link from "next/link";
 import { toast, Toaster } from "sonner";
@@ -33,6 +33,39 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
       .join(" ");
 
   const totalScenes = initialScenesData.scenes.length;
+
+  const normalizeText = (text: string) => {
+    if (!text) return "";
+    return text
+      .trim()
+      .toUpperCase()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // remove zero width joiners/spaces
+      .replace(/\s+/g, ' '); // normalize multiple spaces to a single space
+  };
+
+  const characterSceneCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (initialSummary.characters) {
+      initialSummary.characters.forEach(char => {
+        const charUpper = normalizeText(char);
+        counts[char] = initialScenesData.scenes.filter(s => normalizeText(s.content).includes(charUpper)).length;
+      });
+    }
+    return counts;
+  }, [initialSummary.characters, initialScenesData.scenes]);
+
+  const locationSceneCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (initialSummary.locations) {
+      initialSummary.locations.forEach(loc => {
+        const locUpper = normalizeText(loc);
+        counts[loc] = initialScenesData.scenes.filter(s => 
+          normalizeText(s.heading).includes(locUpper) || normalizeText(s.content).includes(locUpper)
+        ).length;
+      });
+    }
+    return counts;
+  }, [initialSummary.locations, initialScenesData.scenes]);
 
   const getSceneStats = () => {
     let day = 0;
@@ -177,9 +210,16 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
               <div className="flex flex-wrap gap-2">
                 {initialSummary.characters && initialSummary.characters.length > 0 ? (
                   initialSummary.characters.map((char, idx) => (
-                    <span key={idx} className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-md text-sm font-medium print:border-gray-300 print:text-black print:bg-gray-100">
-                      {char}
-                    </span>
+                    <div 
+                      key={idx} 
+                      className="group relative flex items-center bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-md text-sm font-medium print:border-gray-300 print:text-black print:bg-gray-100 cursor-default"
+                      title={`${characterSceneCounts[char] || 0} scenes`}
+                    >
+                      <span>{char}</span>
+                      <span className="ml-2 hidden group-hover:inline-flex group-active:inline-flex items-center justify-center rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-bold text-blue-300 print:inline-flex print:bg-gray-200 print:text-gray-700">
+                        {characterSceneCounts[char] || 0}
+                      </span>
+                    </div>
                   ))
                 ) : (
                   <p className="text-sm text-[#AAB4BF] italic print:text-gray-500">No characters detected</p>
@@ -196,9 +236,16 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
               <div className="flex flex-wrap gap-2">
                 {initialSummary.locations && initialSummary.locations.length > 0 ? (
                   initialSummary.locations.map((loc, idx) => (
-                    <span key={idx} className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-md text-sm font-medium print:border-gray-300 print:text-black print:bg-gray-100">
-                      {loc}
-                    </span>
+                    <div 
+                      key={idx} 
+                      className="group relative flex items-center bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-md text-sm font-medium print:border-gray-300 print:text-black print:bg-gray-100 cursor-default"
+                      title={`${locationSceneCounts[loc] || 0} scenes`}
+                    >
+                      <span>{loc}</span>
+                      <span className="ml-2 hidden group-hover:inline-flex group-active:inline-flex items-center justify-center rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-bold text-green-300 print:inline-flex print:bg-gray-200 print:text-gray-700">
+                        {locationSceneCounts[loc] || 0}
+                      </span>
+                    </div>
                   ))
                 ) : (
                   <p className="text-sm text-[#AAB4BF] italic print:text-gray-500">No locations detected</p>
