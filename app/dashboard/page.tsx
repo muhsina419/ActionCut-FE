@@ -21,6 +21,7 @@ type ProjectSummary = {
   id: string;
   title: string;
   language: string;
+  is_archived: boolean;
   created_at: string;
   screenplay_count: number;
   screenplays: ScreenplaySummary[];

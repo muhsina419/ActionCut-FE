@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { Globe, Mail, ShieldCheck } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
+import { Footer } from "@/components/footer";
 
 type OtpResponse = {
   challenge_id: string;
@@ -14,7 +15,7 @@ type OtpResponse = {
   dev_code?: string | null;
 };
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -89,15 +90,16 @@ export default function SignInPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] px-6 py-10 text-white">
-      <div className="mx-auto w-full max-w-md rounded-xl border border-white/10 bg-[#1A1A1A] p-6">
+    <main className="min-h-screen bg-[#0F0F0F] text-white flex flex-col">
+      <div className="flex-grow flex items-center justify-center px-6 py-10">
+        <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#1A1A1A] p-6">
         <h1 className="text-2xl font-semibold">Sign In</h1>
         <p className="mt-2 text-sm text-[#A0A0A0]">Welcome back to Action Cut AI.</p>
 
         <button
           type="button"
           onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-black/30 px-4 py-2 text-sm font-medium hover:bg-white/5"
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-black/30 px-4 py-2 text-sm font-medium hover:bg-white/5 cursor-pointer"
         >
           <Globe className="h-4 w-4" />
           Sign in with Google
@@ -156,7 +158,7 @@ export default function SignInPage() {
             <button
               disabled={busy}
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#FFC107] px-4 py-2 font-semibold text-black hover:brightness-110 disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#FFC107] px-4 py-2 font-semibold text-black hover:brightness-110 disabled:opacity-60 cursor-pointer"
             >
               <Mail className="h-4 w-4" />
               {busy ? "Sending Code..." : "Send Code"}
@@ -186,7 +188,7 @@ export default function SignInPage() {
             <button
               disabled={busy}
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#FFC107] px-4 py-2 font-semibold text-black hover:brightness-110 disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#FFC107] px-4 py-2 font-semibold text-black hover:brightness-110 disabled:opacity-60 cursor-pointer"
             >
               <ShieldCheck className="h-4 w-4" />
               {busy ? "Verifying..." : "Verify and Sign In"}
@@ -194,7 +196,7 @@ export default function SignInPage() {
             <button
               type="button"
               onClick={() => setStep("credentials")}
-              className="w-full rounded-md border border-white/15 bg-black/20 px-4 py-2 text-sm hover:bg-white/5"
+              className="w-full rounded-md border border-white/15 bg-black/20 px-4 py-2 text-sm hover:bg-white/5 cursor-pointer"
             >
               Change Email or Password
             </button>
@@ -209,7 +211,9 @@ export default function SignInPage() {
             Create an account
           </Link>
         </p>
+        </div>
       </div>
+      <Footer />
     </main>
   );
 }
@@ -217,4 +221,16 @@ export default function SignInPage() {
 async function responseErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => ({}));
   return typeof body.detail === "string" ? body.detail : fallback;
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-[#0F0F0F] px-6 py-10 text-white flex items-center justify-center">
+        <div className="text-[#A0A0A0] text-sm animate-pulse">Loading sign in...</div>
+      </main>
+    }>
+      <SignInForm />
+    </Suspense>
+  );
 }

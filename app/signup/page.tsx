@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { Footer } from "@/components/footer";
 
 type OtpResponse = {
   challenge_id: string;
@@ -108,8 +109,9 @@ export default function SignUpPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] px-6 py-10 text-white">
-      <div className="mx-auto w-full max-w-md rounded-xl border border-white/10 bg-[#1A1A1A] p-6">
+    <main className="min-h-screen bg-[#0F0F0F] text-white flex flex-col">
+      <div className="flex-grow flex items-center justify-center px-6 py-10">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-white/10 bg-[#1A1A1A] p-6">
         <h1 className="text-2xl font-semibold">Create Account</h1>
         <p className="mt-2 text-sm text-[#A0A0A0]">Start your first AI-powered screenplay breakdown.</p>
 
@@ -229,7 +231,9 @@ export default function SignUpPage() {
             Sign in
           </Link>
         </p>
+        </div>
       </div>
+      <Footer />
     </main>
   );
 }

@@ -1,14 +1,83 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Eye, FileUp, RotateCcw, Trash2, ArrowLeft, FileText, MoreVertical, Edit2, Copy, Archive, FolderX, Play } from "lucide-react";
+import { 
+  Eye, 
+  FileUp, 
+  RotateCcw, 
+  Trash2, 
+  ArrowLeft, 
+  FileText, 
+  MoreVertical, 
+  Edit2, 
+  Copy, 
+  Archive, 
+  FolderX, 
+  Play 
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 import type { ProcessingStatus, ProcessingSummary } from "@/lib/screenplay-types";
+
+// ----------------------------------------------------------------------
+// Spotlight Cursor Follower Component
+// ----------------------------------------------------------------------
+function SpotlightCursorFollower() {
+  const [mousePosition, setMousePosition] = useState({ x: -100, y: -100 });
+  const [isVisible, setIsVisible] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+      if (!isVisible) setIsVisible(true);
+    };
+
+    const handleMouseLeave = () => setIsVisible(false);
+    const handleMouseEnter = () => setIsVisible(true);
+    const handleMouseDown = () => setIsPressed(true);
+    const handleMouseUp = () => setIsPressed(false);
+
+    window.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseleave", handleMouseLeave);
+    document.addEventListener("mouseenter", handleMouseEnter);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      document.removeEventListener("mouseenter", handleMouseEnter);
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isVisible]);
+
+  if (!isVisible) return null;
+
+  return (
+    <motion.div
+      className="pointer-events-none fixed top-0 left-0 z-50 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,197,24,0.18)_0%,rgba(245,197,24,0)_70%)] blur-[2px]"
+      animate={{
+        x: mousePosition.x,
+        y: mousePosition.y,
+        scale: isPressed ? 1.35 : 1,
+      }}
+      transition={{
+        type: "spring",
+        damping: 30,
+        stiffness: 300,
+        mass: 0.4,
+      }}
+    />
+  );
+}
 
 type ScreenplaySummary = {
   id: string;
@@ -373,57 +442,66 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
   };
 
   return (
-    <div className="min-h-screen bg-[#0F0F0F] text-white">
+    <div className="min-h-screen bg-[#060709] text-white flex flex-col relative overflow-hidden">
+      {/* Background Projector Glows */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[radial-gradient(circle_at_0%_0%,rgba(245,197,24,0.06),transparent_50%)] pointer-events-none z-0" />
+      <div className="absolute top-[300px] right-1/4 w-[400px] h-[400px] bg-[radial-gradient(circle_at_100%_100%,rgba(59,130,246,0.04),transparent_50%)] pointer-events-none z-0" />
+
+      {/* Spotlight Cursor Follower */}
+      <SpotlightCursorFollower />
+
       <Navbar user={user} apiBaseUrl={apiBaseUrl} />
-      <main className="px-6 py-8">
+      <main className="px-6 py-8 flex-grow relative z-10">
         <Toaster richColors position="top-right" />
         <div className="mx-auto max-w-6xl space-y-6">
           
-          <Link href="/dashboard" className="inline-flex items-center text-sm text-[#A0A0A0] hover:text-[#FFC107] transition-colors">
+          <Link href="/dashboard" className="inline-flex items-center text-xs font-bold uppercase tracking-wider text-[#8F9CAE] hover:text-[#F5C518] transition-colors cursor-pointer">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
           </Link>
 
-          <section className="rounded-xl border border-white/10 bg-[#1A1A1A] p-6 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          {/* Frosted glass header slate */}
+          <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0F1015]/65 p-6 shadow-2xl backdrop-blur-xl">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_100%_0%,rgba(245,197,24,0.04),transparent_40%)]" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3">
-                  <h1 className="text-3xl font-semibold text-white">{project.title}</h1>
+                  <h1 className="text-2xl font-extrabold text-white tracking-tight font-heading">{project.title}</h1>
                   {project.is_archived && (
-                    <span className="w-fit rounded bg-orange-500/20 px-2 py-0.5 text-[10px] font-medium text-orange-400">ARCHIVED</span>
+                    <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[8px] font-extrabold text-amber-500 border border-amber-500/20 uppercase tracking-wide">ARCHIVED</span>
                   )}
                   
                   <div className="relative ml-2" ref={menuRef}>
                     <button
                       onClick={() => setMenuOpen(!menuOpen)}
-                      className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                      className="flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
                     >
-                      <MoreVertical className="h-5 w-5" />
+                      <MoreVertical className="h-4.5 w-4.5" />
                     </button>
                     {menuOpen && (
-                      <div className="absolute left-0 mt-2 w-48 origin-top-left rounded-md border border-white/10 bg-[#1A1A1A] py-1 shadow-lg z-50">
+                      <div className="absolute left-0 mt-2 w-48 origin-top-left rounded-md border border-white/10 bg-[#0F1015] py-1 shadow-2xl z-50">
                         <button
                           onClick={() => { setMenuOpen(false); setNewTitle(project.title); setShowRenameModal(true); }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
                         >
-                          <Edit2 className="h-4 w-4" /> Rename
+                          <Edit2 className="h-3.5 w-3.5" /> Rename
                         </button>
                         <button
                           onClick={duplicateProject}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
                         >
-                          <Copy className="h-4 w-4" /> Duplicate
+                          <Copy className="h-3.5 w-3.5" /> Duplicate
                         </button>
                         <button
                           onClick={() => { setMenuOpen(false); setConfirmAction({ type: "archive-project" }); }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
                         >
-                          <Archive className="h-4 w-4" /> {project.is_archived ? "Unarchive" : "Archive"}
+                          <Archive className="h-3.5 w-3.5" /> {project.is_archived ? "Unarchive" : "Archive"}
                         </button>
                         <button
                           onClick={() => { setMenuOpen(false); setConfirmAction({ type: "delete-project" }); }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-white/5"
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-white/5 cursor-pointer"
                         >
-                          <Trash2 className="h-4 w-4" /> Delete
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
                         </button>
                       </div>
                     )}
@@ -431,20 +509,20 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                 </div>
                 
                 <div className="mt-3 flex items-center gap-3">
-                  <span className="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-[#A0A0A0]">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[9px] font-bold text-[#8F9CAE]">
                     Language: {project.language}
                   </span>
-                  <span className="inline-flex items-center text-sm text-[#A0A0A0]">
-                    <FileText className="mr-1.5 h-4 w-4" />
-                    {project.screenplay_count} Scripts Total
+                  <span className="inline-flex items-center text-xs font-bold text-[#8F9CAE]">
+                    <FileText className="mr-1.5 h-4 w-4 text-[#F5C518]" />
+                    {project.screenplay_count} Script{project.screenplay_count !== 1 ? 's' : ''} Total
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-[#A0A0A0]/70">Created on {new Date(project.created_at).toLocaleString()}</p>
+                <p className="mt-2 text-[10px] font-mono text-[#8F9CAE]/75">Initialized on {new Date(project.created_at).toLocaleString()}</p>
               </div>
 
               {!project.is_archived && (
                 <div className="flex gap-2">
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-[#FFC107] px-6 py-2.5 text-sm font-semibold text-black transition hover:brightness-110">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#F5C518] hover:bg-[#E2B30F] px-5 py-2.5 text-xs font-bold text-black transition-all active:scale-95 shadow-md shadow-[#F5C518]/10 cursor-pointer">
                     <FileUp className="h-4 w-4" />
                     Upload New Script
                     <input
@@ -460,143 +538,168 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
             </div>
           </section>
 
-          <section>
-            <h2 className="mb-4 text-xl font-medium text-white">Uploaded Scripts</h2>
+          {/* Scripts list as timeline rows */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileText className="h-5 w-5 text-[#F5C518]" /> Uploaded Screenplay Tracks
+            </h2>
             {project.screenplays.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-[#1A1A1A] p-12 text-center">
-                <FileText className="mx-auto h-12 w-12 text-[#A0A0A0] opacity-30" />
-                <p className="mt-4 text-[#A0A0A0]">No scripts uploaded yet.</p>
-                <p className="mt-1 text-sm text-[#A0A0A0]/70">Upload a script to begin the AI breakdown.</p>
+              <div className="rounded-2xl border border-white/5 border-dashed bg-[#0F1015]/45 p-12 text-center text-[#8F9CAE]">
+                <FolderX className="mx-auto h-12 w-12 opacity-35 mb-4" />
+                <p className="text-xs">No scripts uploaded yet.</p>
+                <p className="mt-1 text-[10px] opacity-75">Upload a screenplay track to trigger the AI breakdown.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {project.screenplays.map((screenplay) => (
-                  <div key={screenplay.id} className="rounded-xl border border-white/10 bg-[#1A1A1A] p-5 transition-colors hover:border-white/20">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-medium text-white">{screenplay.title}</h3>
-                        <p className="mt-1 flex items-center text-xs text-[#A0A0A0]">
-                          {screenplay.language} • {new Date(screenplay.created_at).toLocaleString()}
-                        </p>
-                        <p className="mt-2 text-sm text-[#A0A0A0]">
-                          <span className="font-medium text-white/80">Status:</span> {screenplay.processing_status} <span className="mx-2">|</span> 
-                          <span className="font-medium text-white/80">Scenes:</span> {screenplay.total_scenes}
-                        </p>
-                        
-                        <ProcessingProgress screenplay={screenplay} />
+                  <article 
+                    key={screenplay.id} 
+                    className="group relative flex flex-col md:flex-row items-start md:items-center justify-between rounded-xl border border-white/5 bg-[#0F1015]/45 hover:bg-[#0F1015]/80 p-5 transition-all duration-300 gap-4"
+                  >
+                    {/* Playhead Hover Indicator */}
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-[#F5C518] group-hover:h-1/2 transition-all duration-300 rounded-r-md" />
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-extrabold text-white">{screenplay.title}</h3>
+                      <div className="mt-1.5 flex items-center gap-3">
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[9px] font-bold text-[#8F9CAE]">
+                          {screenplay.language}
+                        </span>
+                        <span className="text-[10px] font-mono text-[#8F9CAE]/75">
+                          Uploaded: {new Date(screenplay.created_at).toLocaleDateString()}
+                        </span>
                       </div>
                       
-                      <div className="flex items-center gap-2 self-start flex-wrap">
+                      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                        <span className="text-[#8F9CAE] flex items-center gap-1.5">
+                          <span className="font-bold text-white/80">Status:</span> 
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase border ${
+                            screenplay.processing_status === "completed" || screenplay.processing_status === "corrected"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              : screenplay.processing_status === "failed"
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : screenplay.processing_status === "uploaded"
+                              ? "bg-white/5 text-[#8F9CAE] border-white/10"
+                              : "bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse"
+                          }`}>
+                            {screenplay.processing_status}
+                          </span>
+                        </span>
+                        <span className="text-[#8F9CAE]"><span className="font-bold text-white/80">Scenes detected:</span> {screenplay.total_scenes}</span>
+                      </div>
+                      
+                      <ProcessingProgress screenplay={screenplay} />
+                    </div>
+                    
+                    <div className="flex items-center gap-3.5 self-end md:self-center shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
+                      <div className="flex items-center gap-2">
                         {screenplay.processing_status === "uploaded" && (
                            <Button
                              type="button"
-                             size="sm"
                              disabled={busyScreenplayId === screenplay.id}
                              onClick={() => proceedScript(screenplay.id)}
-                             className="bg-[#FFC107] text-black hover:brightness-110"
+                             className="bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold h-9 px-4 active:scale-95 transition-all cursor-pointer"
                            >
-                             <Play className="mr-2 h-4 w-4" /> Proceed
+                             <Play className="mr-1.5 h-4 w-4 fill-black text-black" /> Proceed
                            </Button>
                         )}
                         
                         {screenplay.processing_status !== "uploaded" && (
+                           <Button
+                             type="button"
+                             variant="outline"
+                             onClick={() => router.push(`/screenplays/${screenplay.id}/summary`)}
+                             className="border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white h-9 px-4 active:scale-95 transition-all cursor-pointer"
+                           >
+                             <Eye className="mr-1.5 h-4 w-4" /> View Breakdown
+                           </Button>
+                        )}
+                        
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          disabled={busyScreenplayId === screenplay.id}
+                          onClick={() => setConfirmAction({
+                            type: "delete-script",
+                            screenplayId: screenplay.id,
+                            title: screenplay.title,
+                          })}
+                          className="h-9 w-9 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-400 border border-red-500/25 active:scale-95 transition-all cursor-pointer"
+                          title="Delete Script"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+
+                        <div className="relative script-menu-container">
                           <Button
                             type="button"
                             variant="outline"
-                            size="sm"
-                            onClick={() => router.push(`/screenplays/${screenplay.id}/summary`)}
-                            className="border-white/20 hover:bg-white/10"
-                          >
-                            <Eye className="mr-2 h-4 w-4" /> View Breakdown
-                          </Button>
-                        )}
-                        
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="destructive"
                             size="icon"
-                            disabled={busyScreenplayId === screenplay.id}
-                            onClick={() => setConfirmAction({
-                              type: "delete-script",
-                              screenplayId: screenplay.id,
-                              title: screenplay.title,
-                            })}
-                            className="h-9 w-9"
-                            title="Delete Script"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenScriptMenuId(openScriptMenuId === screenplay.id ? null : screenplay.id);
+                            }}
+                            className="h-9 w-9 border-white/10 bg-white/5 text-[#8F9CAE] hover:bg-white/10 hover:text-white active:scale-95 transition-all cursor-pointer"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <MoreVertical className="h-4 w-4" />
                           </Button>
-
-                          <div className="relative script-menu-container">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenScriptMenuId(openScriptMenuId === screenplay.id ? null : screenplay.id);
-                              }}
-                              className="h-9 w-9 border-white/20 hover:bg-white/10"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                            
-                            {openScriptMenuId === screenplay.id && (
-                              <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-md border border-white/10 bg-[#1A1A1A] py-1 shadow-lg z-50">
-                                <button
-                                  onClick={() => router.push(`/screenplays/${screenplay.id}/scenes`)}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
-                                >
-                                  Script Development
-                                </button>
-                                <button
-                                  onClick={() => toast.info("Pre-production Planning is coming soon!")}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
-                                >
-                                  Pre-production Planning
-                                </button>
-                                <button
-                                  onClick={() => toast.info("Budget Estimation is coming soon!")}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
-                                >
-                                  Budget Estimation
-                                </button>
-                                <button
-                                  onClick={() => toast.info("Creative Analysis is coming soon!")}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white"
-                                >
-                                  Creative Analysis
-                                </button>
-                                <div className="my-1 h-px bg-white/10" />
-                                <button
-                                  disabled={busyScreenplayId === screenplay.id}
-                                  onClick={() => {
-                                    setOpenScriptMenuId(null);
-                                    setConfirmAction({
-                                      type: "reprocess-script",
-                                      screenplayId: screenplay.id,
-                                      title: screenplay.title,
-                                    });
-                                  }}
-                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A0A0A0] hover:bg-white/5 hover:text-white disabled:opacity-50"
-                                >
-                                  <RotateCcw className="h-4 w-4" /> Re-Process Script
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          
+                          {openScriptMenuId === screenplay.id && (
+                            <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-md border border-white/10 bg-[#0F1015] py-1.5 shadow-2xl z-50">
+                              <button
+                                onClick={() => router.push(`/screenplays/${screenplay.id}/scenes`)}
+                                className="flex w-full items-center px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
+                              >
+                                Script Development
+                              </button>
+                              <button
+                                onClick={() => toast.info("Pre-production Planning is coming soon!")}
+                                className="flex w-full items-center px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
+                              >
+                                Pre-production Planning
+                              </button>
+                              <button
+                                onClick={() => toast.info("Budget Estimation is coming soon!")}
+                                className="flex w-full items-center px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
+                              >
+                                Budget Estimation
+                              </button>
+                              <button
+                                onClick={() => toast.info("Creative Analysis is coming soon!")}
+                                className="flex w-full items-center px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white cursor-pointer"
+                              >
+                                Creative Analysis
+                              </button>
+                              <div className="my-1.5 h-px bg-white/5" />
+                              <button
+                                disabled={busyScreenplayId === screenplay.id}
+                                onClick={() => {
+                                  setOpenScriptMenuId(null);
+                                  setConfirmAction({
+                                    type: "reprocess-script",
+                                    screenplayId: screenplay.id,
+                                    title: screenplay.title,
+                                  });
+                                }}
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#8F9CAE] hover:bg-white/5 hover:text-white disabled:opacity-50 cursor-pointer"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" /> Re-Process Script
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
-            {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-4 text-xs text-red-400">{error}</p>}
           </section>
         </div>
 
+        {/* Confirmation Modal */}
         <ConfirmationModal
           action={confirmAction}
           busy={Boolean(busyScreenplayId)}
@@ -606,26 +709,35 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
         
         {/* Rename Modal */}
         {showRenameModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-lg border border-white/10 bg-[#1A1A1A] p-5 text-white shadow-2xl">
-              <h2 className="text-lg font-semibold text-white">Rename Project</h2>
-              <div className="mt-5 space-y-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0F1015]/90 p-6 text-white shadow-2xl backdrop-blur-xl relative">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(245,197,24,0.06),transparent_40%)] pointer-events-none" />
+              
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Edit2 className="h-4.5 w-4.5 text-[#F5C518]" /> Rename Project Track
+              </h2>
+              
+              <div className="mt-5 space-y-4 relative z-10">
                 <div>
-                  <label className="mb-2 block text-sm text-[#A0A0A0]">New Title</label>
+                  <label className="mb-2 block text-xs font-bold text-[#8F9CAE] uppercase tracking-wide">New Title</label>
                   <input
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full rounded-md border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-[#FFC107]"
+                    className="w-full rounded-lg border border-white/10 bg-black/35 px-3.5 py-2.5 text-xs text-white outline-none focus:border-[#F5C518]"
                     placeholder="New title..."
                     autoFocus
                   />
                 </div>
               </div>
-              <div className="mt-6 flex justify-end gap-2">
-                <Button variant="outline" disabled={isRenaming} onClick={() => setShowRenameModal(false)} className="border-white/20 hover:bg-white/10">
+              <div className="mt-7 flex justify-end gap-3 relative z-10">
+                <Button variant="outline" disabled={isRenaming} onClick={() => setShowRenameModal(false)} className="border-white/10 bg-white/5 text-white hover:bg-white/10 h-9 px-4 py-0 cursor-pointer">
                   Cancel
                 </Button>
-                <Button disabled={isRenaming || !newTitle.trim()} onClick={renameProject} className="bg-[#FFC107] text-black hover:brightness-110">
+                <Button 
+                  disabled={isRenaming || !newTitle.trim()} 
+                  onClick={renameProject} 
+                  className="bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold h-9 px-4 transition-all active:scale-95 cursor-pointer"
+                >
                   {isRenaming ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
@@ -634,6 +746,7 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
         )}
 
       </main>
+      <Footer />
     </div>
   );
 }
@@ -648,13 +761,13 @@ function ProcessingProgress({ screenplay }: { screenplay: ScreenplaySummary }) {
 
   const progress = Math.max(0, Math.min(100, screenplay.processing_progress));
   return (
-    <div className="mt-4 w-full max-w-lg rounded-md border border-[#FFC107]/20 bg-black/40 p-3">
-      <div className="flex justify-between items-center text-xs text-[#A0A0A0]">
+    <div className="mt-4 w-full max-w-lg rounded-xl border border-[#F5C518]/25 bg-black/40 p-4">
+      <div className="flex justify-between items-center text-xs text-[#8F9CAE]">
         <span>{screenplay.processing_message ?? screenplay.processing_status}</span>
         <span>{progress}%</span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-[#FFC107] transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
+      <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/5">
+        <div className="h-full rounded-full bg-gradient-to-r from-[#F5C518] to-amber-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
@@ -709,12 +822,14 @@ function ConfirmationModal({
   }[action.type];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-lg border border-white/10 bg-[#1A1A1A] p-5 text-white shadow-2xl">
-        <h2 className="text-lg font-semibold text-white">{copy.title}</h2>
-        <p className="mt-2 text-sm leading-6 text-[#A0A0A0]">{copy.body}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" disabled={busy} onClick={onCancel} className="border-white/20 hover:bg-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0F1015]/90 p-6 text-white shadow-2xl backdrop-blur-xl relative">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(245,197,24,0.06),transparent_40%)] pointer-events-none" />
+        
+        <h2 className="text-base font-extrabold text-white">{copy.title}</h2>
+        <p className="mt-3 text-xs leading-5 text-[#8F9CAE]">{copy.body}</p>
+        <div className="mt-6 flex justify-end gap-3 relative z-10">
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel} className="border-white/10 bg-white/5 text-white hover:bg-white/10 h-9 px-4 py-0 cursor-pointer">
             Cancel
           </Button>
           <Button
@@ -722,7 +837,11 @@ function ConfirmationModal({
             variant={copy.variant as any}
             disabled={busy}
             onClick={onConfirm}
-            className={copy.variant === "default" ? "bg-[#FFC107] text-black hover:brightness-110" : ""}
+            className={
+              copy.variant === "default" 
+                ? "bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold h-9 px-4 cursor-pointer" 
+                : "bg-red-600 hover:bg-red-700 text-white h-9 px-4 cursor-pointer"
+            }
           >
             {busy ? "Working..." : copy.confirm}
           </Button>
