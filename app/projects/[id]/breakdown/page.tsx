@@ -22,7 +22,7 @@ export default async function BreakdownPage({
   let initialBreakdown = null;
   try {
     const res = await fetch(`${apiBaseUrl}/api/projects/${id}/breakdown`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${backendAccessToken}` },
       cache: "no-store"
     });
     if (res.ok) {

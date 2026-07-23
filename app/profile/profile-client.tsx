@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 export default function ProfileClient({
   backendAccessToken,
@@ -140,9 +141,9 @@ export default function ProfileClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#0F0F0F] text-white">
+    <div className="min-h-screen bg-[#0F0F0F] text-white flex flex-col">
       <Navbar user={{ name, email, avatarUrl }} apiBaseUrl={apiBaseUrl} />
-      <main className="px-6 py-10">
+      <main className="px-6 py-10 flex-grow">
         <div className="mx-auto w-full max-w-2xl space-y-8">
           
           <div className="flex items-center justify-between">
@@ -257,6 +258,7 @@ export default function ProfileClient({
 
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

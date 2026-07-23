@@ -1,14 +1,86 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { ArrowLeft, Save, Plus, Edit2, Trash2, Check, X, ChevronDown, ChevronUp, Users, MapPin, RotateCcw } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { 
+  ArrowLeft, 
+  Save, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  Check, 
+  X, 
+  ChevronDown, 
+  ChevronUp, 
+  Users, 
+  MapPin, 
+  RotateCcw,
+  Search,
+  ChevronLeft,
+  ChevronRight
+} from "lucide-react";
 import Link from "next/link";
 import { toast, Toaster } from "sonner";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import type { ProcessingSummary, Scene, SceneListResponse } from "@/lib/screenplay-types";
 import { SceneBreakdownView } from "../summary/scene-breakdown-view";
+import { Footer } from "@/components/footer";
+
+// ----------------------------------------------------------------------
+// Spotlight Cursor Follower Component
+// ----------------------------------------------------------------------
+function SpotlightCursorFollower() {
+  const [mousePosition, setMousePosition] = useState({ x: -100, y: -100 });
+  const [isVisible, setIsVisible] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+      if (!isVisible) setIsVisible(true);
+    };
+
+    const handleMouseLeave = () => setIsVisible(false);
+    const handleMouseEnter = () => setIsVisible(true);
+    const handleMouseDown = () => setIsPressed(true);
+    const handleMouseUp = () => setIsPressed(false);
+
+    window.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseleave", handleMouseLeave);
+    document.addEventListener("mouseenter", handleMouseEnter);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      document.removeEventListener("mouseenter", handleMouseEnter);
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isVisible]);
+
+  if (!isVisible) return null;
+
+  return (
+    <motion.div
+      className="pointer-events-none fixed top-0 left-0 z-50 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,197,24,0.18)_0%,rgba(245,197,24,0)_70%)] blur-[2px]"
+      animate={{
+        x: mousePosition.x,
+        y: mousePosition.y,
+        scale: isPressed ? 1.35 : 1,
+      }}
+      transition={{
+        type: "spring",
+        damping: 30,
+        stiffness: 300,
+        mass: 0.4,
+      }}
+    />
+  );
+}
 
 function EditableTagList({
   items,
@@ -73,16 +145,21 @@ function EditableTagList({
           onChange={e => setNewItem(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && add()}
           placeholder="Add new..."
-          className={`flex-1 bg-black/40 border border-white/10 rounded px-3 py-1.5 text-sm outline-none text-white ${focusRing}`}
+          className={`flex-1 bg-black/40 border border-white/10 rounded px-3 py-1.5 text-xs outline-none text-white ${focusRing}`}
         />
-        <Button size="sm" variant="secondary" onClick={add} className="h-8 bg-white/10 hover:bg-white/20 text-white border-0">Add</Button>
+        <Button size="sm" variant="secondary" onClick={add} className="h-8 bg-white/10 hover:bg-white/20 text-white border-0 text-xs">Add</Button>
         {hasChanges && (
-          <Button size="sm" variant="ghost" onClick={handleUndo} className="h-8 px-2 text-[#AAB4BF] hover:text-white" title="Undo changes">
-            <RotateCcw className="h-4 w-4" />
+          <Button size="sm" variant="ghost" onClick={handleUndo} className="h-8 px-2 text-[#8F9CAE] hover:text-white" title="Undo changes">
+            <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         )}
-        <Button size="sm" className="h-8 bg-[#FFC107] text-black hover:brightness-110" onClick={onSave} disabled={isSaving || !hasChanges}>
-          <Save className="mr-1.5 h-3.5 w-3.5" />
+        <Button 
+          size="sm" 
+          className="h-8 bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold border-0 cursor-pointer text-xs" 
+          onClick={onSave} 
+          disabled={isSaving || !hasChanges}
+        >
+          <Save className="mr-1 h-3.5 w-3.5" />
           {isSaving ? "Saving..." : "Save"}
         </Button>
       </div>
@@ -106,7 +183,7 @@ function EditableTagList({
             </button>
           </div>
         ))}
-        {items.length === 0 && <p className="text-xs text-[#AAB4BF]/60 italic">None detected</p>}
+        {items.length === 0 && <p className="text-xs text-[#8F9CAE]/60 italic">None detected</p>}
       </div>
     </div>
   );
@@ -141,7 +218,21 @@ export default function ScenesClient({ backendAccessToken, scriptId, initialSumm
   const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
   const [editValues, setEditValues] = useState<Record<string, { heading: string; content: string }>>({});
 
+  // Search & Navigation States
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterEnv, setFilterEnv] = useState<"ALL" | "INT" | "EXT">("ALL");
+  
+  // Single-Scene Focus Mode State
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+
   const totalScenes = scenes.length;
+
+  // Set first scene as active if none is active
+  useEffect(() => {
+    if (scenes.length > 0 && !activeSceneId) {
+      setActiveSceneId(scenes[0].id);
+    }
+  }, [scenes, activeSceneId]);
 
   const saveMetadata = async (type: "characters" | "locations", data: string[]) => {
     const isChar = type === "characters";
@@ -237,24 +328,6 @@ export default function ScenesClient({ backendAccessToken, scriptId, initialSumm
     setHasUnsavedChanges(true);
   };
 
-  const addNewScene = (index: number) => {
-    const newId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const newScene: Scene = {
-      id: newId,
-      script_id: scriptId,
-      scene_number: 0, // Will be re-calculated on save
-      heading: "NEW SCENE",
-      content: "",
-      created_at: new Date().toISOString(),
-    };
-
-    const newScenes = [...scenes];
-    newScenes.splice(index, 0, newScene);
-    setScenes(newScenes);
-    startEditing(newScene);
-    setHasUnsavedChanges(true);
-  };
-
   const removeScene = (sceneId: string) => {
     setScenes((current) => current.filter((s) => s.id !== sceneId));
     setHasUnsavedChanges(true);
@@ -265,7 +338,6 @@ export default function ScenesClient({ backendAccessToken, scriptId, initialSumm
     toast.loading("Saving all changes...", { id: "save-all" });
 
     try {
-      // Re-number scenes and remove temporary 'new-' IDs
       const payloadScenes = scenes.map((scene, index) => ({
         id: scene.id.startsWith("new-") ? null : scene.id,
         scene_number: index + 1,
@@ -300,257 +372,466 @@ export default function ScenesClient({ backendAccessToken, scriptId, initialSumm
     }
   };
 
+  // Memoized Search & Filtering
+  const filteredScenes = useMemo(() => {
+    return scenes.filter(scene => {
+      const headingUpper = scene.heading.toUpperCase();
+      const contentUpper = (scene.content || "").toUpperCase();
+      const query = searchQuery.trim().toUpperCase();
+      
+      const matchesSearch = !query || headingUpper.includes(query) || contentUpper.includes(query);
+      
+      let matchesEnv = true;
+      if (filterEnv === "INT") {
+        matchesEnv = headingUpper.includes("INT.") || headingUpper.includes("INT ") || headingUpper.includes("INDOOR");
+      } else if (filterEnv === "EXT") {
+        matchesEnv = headingUpper.includes("EXT.") || headingUpper.includes("EXT ") || headingUpper.includes("OUTDOOR");
+      }
+      
+      return matchesSearch && matchesEnv;
+    });
+  }, [scenes, searchQuery, filterEnv]);
+
+  // Auto-select first filtered scene if active scene is filtered out
+  useEffect(() => {
+    if (filteredScenes.length > 0) {
+      const isStillVisible = filteredScenes.some(s => s.id === activeSceneId);
+      if (!isStillVisible) {
+        setActiveSceneId(filteredScenes[0].id);
+      }
+    }
+  }, [filteredScenes, activeSceneId]);
+
+  const activeScene = useMemo(() => {
+    return scenes.find(s => s.id === activeSceneId);
+  }, [scenes, activeSceneId]);
+
+  const activeIndexInFiltered = useMemo(() => {
+    return filteredScenes.findIndex(s => s.id === activeSceneId);
+  }, [filteredScenes, activeSceneId]);
+
+  const activeIndexInOverall = useMemo(() => {
+    return scenes.findIndex(s => s.id === activeSceneId);
+  }, [scenes, activeSceneId]);
+
+  const goToPrevScene = () => {
+    if (activeIndexInFiltered > 0) {
+      setActiveSceneId(filteredScenes[activeIndexInFiltered - 1].id);
+    }
+  };
+
+  const goToNextScene = () => {
+    if (activeIndexInFiltered < filteredScenes.length - 1) {
+      setActiveSceneId(filteredScenes[activeIndexInFiltered + 1].id);
+    }
+  };
+
+  const handleAddNewScene = () => {
+    const newId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const newScene: Scene = {
+      id: newId,
+      script_id: scriptId,
+      scene_number: 0,
+      heading: "NEW SCENE",
+      content: "",
+      created_at: new Date().toISOString(),
+    };
+
+    const newScenes = [...scenes];
+    const insertIdx = activeIndexInOverall !== -1 ? activeIndexInOverall + 1 : scenes.length;
+    newScenes.splice(insertIdx, 0, newScene);
+    setScenes(newScenes);
+    setActiveSceneId(newId);
+    startEditing(newScene);
+    setHasUnsavedChanges(true);
+  };
+
+  const getSceneDuration = (content: string) => {
+    const textLength = content ? content.trim().length : 0;
+    if (textLength === 0) return "0s";
+    const totalSeconds = Math.max(5, Math.round((textLength / 1000) * 60));
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  };
+
+  // Scroll editor view into visibility on tab change
+  useEffect(() => {
+    if (activeSceneId) {
+      const element = document.getElementById("active-scene-view");
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+  }, [activeSceneId]);
+
   return (
-    <main className="min-h-screen bg-[#101114] text-white">
+    <main className="min-h-screen bg-[#060709] text-white flex flex-col relative overflow-x-hidden w-full">
+      {/* Background Projector Glows */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[radial-gradient(circle_at_0%_0%,rgba(245,197,24,0.06),transparent_50%)] pointer-events-none z-0" />
+      <div className="absolute top-[300px] right-1/4 w-[400px] h-[400px] bg-[radial-gradient(circle_at_100%_100%,rgba(59,130,246,0.04),transparent_50%)] pointer-events-none z-0" />
+
+      {/* Spotlight Cursor Follower */}
+      <SpotlightCursorFollower />
+
       <Toaster richColors position="top-right" />
-      <div className="mx-auto flex max-w-7xl flex-col lg:flex-row items-start gap-8 px-5 py-8">
+      <div className="mx-auto flex max-w-7xl flex-col lg:flex-row items-start gap-8 px-5 py-8 flex-grow relative z-10 w-full">
         
-        {/* Sticky Sidebar */}
-        <aside className="w-full lg:sticky lg:top-8 lg:w-80 space-y-6">
-          <div>
-            <Button asChild variant="ghost" className="mb-4 text-[#C8D1D9] -ml-4">
-              <Link href={summary.project_id ? `/projects/${summary.project_id}` : "/dashboard"}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Project
-              </Link>
-            </Button>
-            <h1 className="text-3xl font-semibold">Script Development</h1>
-            <p className="mt-2 text-sm text-[#AAB4BF]">Review and edit your scenes</p>
+        {/* Sticky Sidebar HUD Capsule */}
+        <aside className="w-full lg:sticky lg:top-8 lg:w-80 space-y-6 shrink-0">
+          <div className="pl-2">
+            <Link 
+              href={summary.project_id ? `/projects/${summary.project_id}` : "/dashboard"}
+              className="inline-flex items-center text-xs font-bold uppercase tracking-wider text-[#8F9CAE] hover:text-[#F5C518] transition-colors cursor-pointer mb-4"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Project
+            </Link>
+            <h1 className="text-2xl font-extrabold tracking-tight font-heading">Script Development</h1>
+            <p className="mt-1 text-xs text-[#8F9CAE]">Review and edit screenplay scenes</p>
           </div>
 
-          <div className="space-y-4 rounded-xl border border-white/10 bg-[#1A1D21] p-5">
-            <div>
-              <p className="text-xs text-[#AAB4BF] uppercase tracking-wider font-semibold">Total Scenes</p>
-              <p className="mt-1 text-4xl font-bold text-[#FFC107]">{totalScenes}</p>
+          <div className="space-y-5 rounded-[2rem] border border-white/5 bg-[#0F1015]/65 p-6 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-[#8F9CAE] uppercase tracking-wider font-mono">Total Scenes</span>
+              <span className="text-2xl font-extrabold text-[#F5C518] font-mono">{totalScenes}</span>
             </div>
-            <div className="h-px bg-white/10 my-4" />
-            <div>
-              <p className="text-xs text-[#AAB4BF] uppercase tracking-wider font-semibold">Language</p>
-              <p className="mt-1 text-lg font-medium">{summary.language}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#AAB4BF] uppercase tracking-wider font-semibold">Format</p>
-              <p className="mt-1 text-lg font-medium">{labelForStructure(summary.structure_type)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#AAB4BF] uppercase tracking-wider font-semibold">Status</p>
-              <p className="mt-1 text-lg font-medium capitalize text-[#86D8C8]">{summary.processing_status}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-black/40 p-5">
+            
+            <div className="h-px bg-white/5" />
+            
             <Button 
-              className="w-full bg-[#FFC107] text-black hover:brightness-110 h-12 font-semibold text-base"
+              className="w-full bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold h-11 transition-all active:scale-95 cursor-pointer shadow-md shadow-[#F5C518]/10 text-xs"
               onClick={saveAllChanges}
               disabled={busy || !hasUnsavedChanges}
             >
-              <Save className="mr-2 h-5 w-5" />
+              <Save className="mr-1.5 h-4.5 w-4.5" />
               {busy ? "Saving..." : "Save All Changes"}
             </Button>
-            {!hasUnsavedChanges && (
-              <p className="mt-3 text-center text-xs text-[#AAB4BF] flex items-center justify-center gap-1">
-                <Check className="h-3 w-3" /> All changes saved
-              </p>
-            )}
-            {hasUnsavedChanges && (
-              <p className="mt-3 text-center text-xs text-orange-400">
+            
+            {hasUnsavedChanges ? (
+              <p className="text-center text-xs text-orange-400 font-bold">
                 You have unsaved changes
               </p>
+            ) : (
+              <p className="text-center text-xs text-emerald-400 font-bold flex items-center justify-center gap-1">
+                <Check className="h-3.5 w-3.5" /> All changes saved
+              </p>
             )}
+
+            {/* Scene Index Map Jumper */}
+            <div className="h-px bg-white/5" />
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-[#8F9CAE] uppercase tracking-wider font-mono">Scene Index Map</span>
+              <div className="max-h-80 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin text-xs">
+                {scenes.map((s, idx) => {
+                  const isFilteredOut = !filteredScenes.some(fs => fs.id === s.id);
+                  const isEditing = editingIds.has(s.id);
+                  const isActive = activeSceneId === s.id;
+                  
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setActiveSceneId(s.id)}
+                      disabled={isFilteredOut}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg border transition-all truncate block cursor-pointer text-[11px] ${
+                        isFilteredOut 
+                          ? "opacity-30 border-transparent text-[#8F9CAE]" 
+                          : isActive
+                            ? "border-[#F5C518]/30 bg-[#F5C518]/10 text-[#F5C518]"
+                            : isEditing
+                              ? "border-amber-500/30 bg-amber-500/5 text-amber-400"
+                              : "border-white/5 hover:border-white/20 hover:bg-white/[0.02] text-white"
+                      }`}
+                    >
+                      <span className="font-mono text-[#F5C518] mr-1.5 font-bold">#{idx + 1}</span>
+                      <span className="font-medium">{s.heading || "Empty Heading"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </aside>
 
         {/* Main Content (Scene Editor) */}
-        <section className="flex-1 w-full space-y-4">
+        <section className="flex-1 w-full space-y-6 min-w-0">
           
-          {/* Summary Card */}
-          <div className="rounded-xl border border-white/10 bg-[#1A1D21] p-6 shadow-md">
-            <h2 className="text-xl font-bold text-white mb-4">Screenplay Overview</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
-                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Language</p>
-                <p className="text-lg font-bold text-white mt-1">{summary.language}</p>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
-                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Scenes</p>
-                <p className="text-lg font-bold text-[#FFC107] mt-1">{summary.scene_count ?? totalScenes}</p>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
-                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Characters</p>
-                <p className="text-lg font-bold text-blue-400 mt-1">{summary.character_count ?? 0}</p>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-white/5">
-                <p className="text-xs text-[#AAB4BF] uppercase font-semibold">Locations</p>
-                <p className="text-lg font-bold text-green-400 mt-1">{summary.location_count ?? 0}</p>
-              </div>
-            </div>
+          {/* Cardless Heading Details */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[#8F9CAE] font-mono pb-4 border-b border-white/5 select-none">
+            <span>{summary.language}</span>
+            <span>•</span>
+            <span>{labelForStructure(summary.structure_type)}</span>
+            <span>•</span>
+            <span>{summary.scene_count ?? totalScenes} Scenes</span>
+            <span>•</span>
+            <span>{summary.character_count ?? 0} Characters</span>
+            <span>•</span>
+            <span>{summary.location_count ?? 0} Locations</span>
+            <span>•</span>
+            <span className="capitalize text-emerald-400 font-extrabold">{summary.processing_status}</span>
           </div>
 
           {/* Optional Review Panels */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Characters Panel */}
-            <div className="rounded-xl border border-white/10 bg-[#1A1D21] overflow-hidden">
+            <div className="rounded-2xl border border-white/5 bg-[#0F1015]/45 hover:bg-[#0F1015]/65 overflow-hidden transition-all duration-300">
               <button
                 onClick={() => setShowCharactersPanel(!showCharactersPanel)}
-                className="w-full flex items-center justify-between p-4 text-left text-sm font-semibold text-white hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between p-4 text-left text-xs font-bold text-white hover:text-[#F5C518] transition-colors cursor-pointer uppercase tracking-wider font-mono"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-blue-400" />
+                  <Users className="h-4.5 w-4.5 text-indigo-400" />
                   Review Characters ({summary.character_count ?? 0})
                 </span>
-                {showCharactersPanel ? <ChevronUp className="h-4 w-4 text-[#AAB4BF]" /> : <ChevronDown className="h-4 w-4 text-[#AAB4BF]" />}
+                {showCharactersPanel ? <ChevronUp className="h-4 w-4 text-[#8F9CAE]" /> : <ChevronDown className="h-4 w-4 text-[#8F9CAE]" />}
               </button>
-              {showCharactersPanel && (
-                <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
-                  <EditableTagList
-                    items={characters}
-                    originalItems={summary.characters || []}
-                    onChange={setCharacters}
-                    onSave={() => saveMetadata("characters", characters)}
-                    isSaving={savingCharacters}
-                    colorScheme="blue"
-                  />
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {showCharactersPanel && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                  >
+                    <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
+                      <EditableTagList
+                        items={characters}
+                        originalItems={summary.characters || []}
+                        onChange={setCharacters}
+                        onSave={() => saveMetadata("characters", characters)}
+                        isSaving={savingCharacters}
+                        colorScheme="blue"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Locations Panel */}
-            <div className="rounded-xl border border-white/10 bg-[#1A1D21] overflow-hidden">
+            <div className="rounded-2xl border border-white/5 bg-[#0F1015]/45 hover:bg-[#0F1015]/65 overflow-hidden transition-all duration-300">
               <button
                 onClick={() => setShowLocationsPanel(!showLocationsPanel)}
-                className="w-full flex items-center justify-between p-4 text-left text-sm font-semibold text-white hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between p-4 text-left text-xs font-bold text-white hover:text-[#F5C518] transition-colors cursor-pointer uppercase tracking-wider font-mono"
               >
                 <span className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-green-400" />
+                  <MapPin className="h-4.5 w-4.5 text-emerald-400" />
                   Review Locations ({summary.location_count ?? 0})
                 </span>
-                {showLocationsPanel ? <ChevronUp className="h-4 w-4 text-[#AAB4BF]" /> : <ChevronDown className="h-4 w-4 text-[#AAB4BF]" />}
+                {showLocationsPanel ? <ChevronUp className="h-4 w-4 text-[#8F9CAE]" /> : <ChevronDown className="h-4 w-4 text-[#8F9CAE]" />}
               </button>
-              {showLocationsPanel && (
-                <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
-                  <EditableTagList
-                    items={locations}
-                    originalItems={summary.locations || []}
-                    onChange={setLocations}
-                    onSave={() => saveMetadata("locations", locations)}
-                    isSaving={savingLocations}
-                    colorScheme="green"
-                  />
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {showLocationsPanel && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "auto" }}
+                    exit={{ height: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                  >
+                    <div className="p-4 border-t border-white/5 bg-black/20 max-h-80 overflow-y-auto">
+                      <EditableTagList
+                        items={locations}
+                        originalItems={summary.locations || []}
+                        onChange={setLocations}
+                        onSave={() => saveMetadata("locations", locations)}
+                        isSaving={savingLocations}
+                        colorScheme="green"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
-          <div className="relative group">
-            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-              <Button size="sm" onClick={() => addNewScene(0)} className="rounded-full shadow-lg bg-[#2A2E33] hover:bg-[#3A3E43] text-white border border-white/10">
-                <Plus className="mr-1.5 h-4 w-4" /> Add Scene
-              </Button>
+          {/* Search & Filter HUD Pill */}
+          <div className="rounded-2xl border border-white/5 bg-[#0F1015]/65 p-4 shadow-xl backdrop-blur-xl flex flex-col sm:flex-row gap-4 items-center justify-between">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8F9CAE]" />
+              <input
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); }}
+                placeholder="Search scenes headings or content..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-xs outline-none text-white focus:border-[#F5C518] transition-colors placeholder:text-[#8F9CAE]/60 font-medium"
+              />
             </div>
-            <div className="h-8" />
+            
+            {/* Filter buttons */}
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+              <div className="flex bg-black/30 border border-white/5 rounded-lg p-0.5 select-none text-[11px] font-bold">
+                <button
+                  onClick={() => { setFilterEnv("ALL"); }}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${filterEnv === "ALL" ? "bg-white/10 text-white" : "text-[#8F9CAE] hover:text-white"}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => { setFilterEnv("INT"); }}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${filterEnv === "INT" ? "bg-white/10 text-white" : "text-[#8F9CAE] hover:text-white"}`}
+                >
+                  INT
+                </button>
+                <button
+                  onClick={() => { setFilterEnv("EXT"); }}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${filterEnv === "EXT" ? "bg-white/10 text-white" : "text-[#8F9CAE] hover:text-white"}`}
+                >
+                  EXT
+                </button>
+              </div>
+            </div>
           </div>
 
-          {scenes.length === 0 && (
-            <div className="text-center py-12 border border-white/10 border-dashed rounded-xl text-[#AAB4BF]">
-              No scenes found. Add a scene to get started.
+          {filteredScenes.length === 0 && (
+            <div className="text-center py-12 border border-white/5 border-dashed rounded-2xl text-[#8F9CAE] bg-[#0F1015]/20">
+              No scenes match the search or filter settings.
             </div>
           )}
 
-          {scenes.map((scene, index) => {
-            const isEditing = editingIds.has(scene.id);
-            const edits = editValues[scene.id];
+          {/* Active Scene Panel (Single-Scene Focus Mode) */}
+          {activeScene ? (
+            (() => {
+              const scene = activeScene;
+              const isEditing = editingIds.has(scene.id);
+              const edits = editValues[scene.id];
+              const displayIndex = activeIndexInOverall + 1;
 
-            return (
-              <div key={scene.id}>
-                <article className="group rounded-xl border border-white/10 bg-[#1A1D21] transition-colors hover:border-white/20 overflow-hidden shadow-sm">
-                  
-                  {isEditing ? (
-                    <div className="p-5 space-y-4 bg-[#212529]">
-                      <div className="flex items-center gap-3">
-                        <span className="shrink-0 rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold text-[#FFC107]">
-                          Scene {index + 1}
-                        </span>
-                        <input
-                          value={edits?.heading ?? ""}
-                          onChange={(e) => updateEditValue(scene.id, "heading", e.target.value)}
-                          className="flex-1 bg-transparent border-b border-white/20 px-2 py-1.5 text-lg font-medium text-white outline-none focus:border-[#FFC107] transition-colors"
-                          placeholder="SCENE HEADING..."
-                          autoFocus={scene.id.startsWith("new-")}
-                        />
+              return (
+                <div 
+                  id="active-scene-view"
+                  className="rounded-2xl border border-white/5 bg-[#0F1015]/65 p-6 shadow-2xl backdrop-blur-xl relative"
+                >
+                  {/* Scene Header */}
+                  <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5C518]/25 bg-black text-xs font-extrabold text-[#F5C518] shadow-md shadow-[#F5C518]/5 select-none">
+                        {displayIndex}
                       </div>
+                      <div>
+                        <span className="text-[10px] font-bold font-mono text-[#8F9CAE] uppercase tracking-wider block">Scene {displayIndex}</span>
+                        {isEditing ? (
+                          <input
+                            value={edits?.heading ?? ""}
+                            onChange={(e) => updateEditValue(scene.id, "heading", e.target.value)}
+                            className="bg-transparent border-b border-white/10 px-1 py-0.5 text-base font-extrabold text-white outline-none focus:border-[#F5C518] transition-colors"
+                            placeholder="SCENE HEADING..."
+                          />
+                        ) : (
+                          <h2 className="text-base font-extrabold text-white tracking-tight">{scene.heading}</h2>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold font-mono text-[#8F9CAE] bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded select-none">
+                        Est: {getSceneDuration(scene.content)}
+                      </span>
+                      {!isEditing && (
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Edit Scene"
+                            onClick={() => startEditing(scene)}
+                            className="h-8 w-8 text-[#8F9CAE] hover:text-[#F5C518] hover:bg-white/5 cursor-pointer rounded-lg transition-all"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Delete Scene"
+                            onClick={() => {
+                              removeScene(scene.id);
+                              // Calculate next active scene index
+                              const nextActiveIdx = activeIndexInOverall > 0 ? activeIndexInOverall - 1 : 1;
+                              const fallbackScene = scenes.filter(s => s.id !== scene.id)[nextActiveIdx] || scenes.filter(s => s.id !== scene.id)[0];
+                              setActiveSceneId(fallbackScene ? fallbackScene.id : null);
+                            }}
+                            className="h-8 w-8 text-[#8F9CAE] hover:text-red-400 hover:bg-red-400/10 cursor-pointer rounded-lg transition-all"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Body Editor or View */}
+                  {isEditing ? (
+                    <div className="space-y-4">
                       <textarea
                         value={edits?.content ?? ""}
                         onChange={(e) => updateEditValue(scene.id, "content", e.target.value)}
-                        rows={6}
-                        className="w-full resize-y rounded-lg border border-white/10 bg-black/30 p-4 text-base leading-relaxed text-[#E6ECF2] outline-none focus:border-[#FFC107] transition-colors"
+                        rows={12}
+                        className="w-full resize-y rounded-xl border border-white/5 bg-black/45 p-4 text-sm leading-relaxed text-white outline-none focus:border-[#F5C518] transition-colors font-mono"
                         placeholder="Scene description and dialogue..."
                       />
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" onClick={() => cancelEditing(scene.id)} className="text-[#AAB4BF] hover:text-white">
-                          <X className="mr-2 h-4 w-4" /> Cancel
+                      <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="ghost" onClick={() => cancelEditing(scene.id)} className="text-[#8F9CAE] hover:text-white cursor-pointer h-9 px-4">
+                          <X className="mr-1.5 h-4 w-4" /> Cancel
                         </Button>
-                        <Button onClick={() => saveSceneLocally(scene.id)} className="bg-white/10 hover:bg-white/20 text-white">
-                          <Check className="mr-2 h-4 w-4" /> Done
+                        <Button onClick={() => saveSceneLocally(scene.id)} className="bg-white/5 border border-white/10 hover:bg-white/10 text-white cursor-pointer h-9 px-4">
+                          <Check className="mr-1.5 h-4 w-4" /> Done
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-5 flex flex-col md:flex-row gap-5 items-start">
-                      <div className="flex-1 w-full min-w-0 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <span className="shrink-0 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs font-semibold text-[#AAB4BF]">
-                            Scene {index + 1}
-                          </span>
-                          <h3 className="text-lg font-semibold text-white break-words">{scene.heading}</h3>
-                        </div>
-                        <div className="whitespace-pre-wrap text-[#C8D1D9] leading-relaxed">
-                          {scene.content || <span className="italic opacity-50">Empty scene</span>}
-                        </div>
-                        <SceneBreakdownView sceneId={scene.id} apiBaseUrl={apiBaseUrl} accessToken={backendAccessToken} />
+                    <div className="space-y-6">
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed font-mono pl-4 border-l-2 border-white/5 py-1 text-[#C8D1D9]">
+                        {scene.content || <span className="italic opacity-30 text-xs font-mono">No screenplay content initialized. Click Edit to write.</span>}
                       </div>
                       
-                      <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Edit Scene"
-                          onClick={() => startEditing(scene)}
-                          className="h-9 w-9 text-[#AAB4BF] hover:text-white hover:bg-white/10"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Delete Scene"
-                          onClick={() => removeScene(scene.id)}
-                          className="h-9 w-9 text-[#AAB4BF] hover:text-red-400 hover:bg-red-400/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <SceneBreakdownView sceneId={scene.id} apiBaseUrl={apiBaseUrl} accessToken={backendAccessToken} />
                     </div>
                   )}
 
-                </article>
+                  {/* Scene Jumper Bottom Nav */}
+                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between select-none">
+                    <Button
+                      variant="ghost"
+                      onClick={goToPrevScene}
+                      disabled={activeIndexInFiltered <= 0}
+                      className="text-xs text-[#8F9CAE] hover:text-white cursor-pointer"
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" /> Prev Scene
+                    </Button>
 
-                <div className="relative group my-2">
-                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <Button size="sm" onClick={() => addNewScene(index + 1)} className="rounded-full shadow-lg bg-[#2A2E33] hover:bg-[#3A3E43] text-white border border-white/10">
-                      <Plus className="mr-1.5 h-4 w-4" /> Add Scene
+                    <Button
+                      size="sm"
+                      onClick={handleAddNewScene}
+                      className="bg-white/5 border border-white/10 hover:bg-white/10 text-white hover:text-white rounded-full text-xs px-4"
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Insert Scene
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      onClick={goToNextScene}
+                      disabled={activeIndexInFiltered >= filteredScenes.length - 1}
+                      className="text-xs text-[#8F9CAE] hover:text-white cursor-pointer"
+                    >
+                      Next Scene <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="h-8 flex items-center justify-center">
-                    <div className="w-full h-px bg-transparent group-hover:bg-white/5 transition-colors" />
-                  </div>
                 </div>
-
+              );
+            })()
+          ) : (
+            scenes.length === 0 && (
+              <div className="text-center py-16 border border-white/5 border-dashed rounded-2xl text-[#8F9CAE] bg-[#0F1015]/20">
+                <p className="mb-4">No scenes available in screenplay.</p>
+                <Button onClick={handleAddNewScene} className="bg-[#F5C518] hover:bg-[#E2B30F] text-black hover:text-black font-bold">
+                  <Plus className="mr-1.5 h-4 w-4" /> Create First Scene
+                </Button>
               </div>
-            );
-          })}
+            )
+          )}
           
         </section>
       </div>
+      <Footer />
     </main>
   );
 }

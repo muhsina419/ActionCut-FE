@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Clapperboard, FileUp, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Footer } from "@/components/footer";
 
 type Props = {
   backendAccessToken: string;
@@ -78,8 +79,9 @@ export default function OnboardingClient({
   };
 
   return (
-    <main className="min-h-screen bg-[#0F0F0F] px-6 py-10 text-white">
-      <div className="mx-auto w-full max-w-3xl space-y-6">
+    <main className="min-h-screen bg-[#0F0F0F] text-white flex flex-col">
+      <div className="flex-grow flex items-center justify-center px-6 py-10">
+        <div className="mx-auto w-full max-w-3xl space-y-6">
         <div className="rounded-xl border border-[#FFC107]/30 bg-[#1A1A1A] p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFC107]/20">
@@ -151,7 +153,9 @@ export default function OnboardingClient({
           </section>
         )}
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        </div>
       </div>
+      <Footer />
     </main>
   );
 }
