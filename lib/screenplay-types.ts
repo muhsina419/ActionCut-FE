@@ -9,6 +9,8 @@ export type ProcessingStatus =
   | "scene_detection"
   | "character_detection"
   | "location_detection"
+  | "cancel_requested"
+  | "cancelled"
   | "completed"
   | "corrected"
   | "failed";
@@ -48,4 +50,3 @@ export type MetadataUpdateRequest = {
   characters?: string[];
   locations?: string[];
 };
-

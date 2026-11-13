@@ -221,14 +221,14 @@ export default function SummaryClient({ backendAccessToken, scriptId, initialSum
 
       // Check Indoor/Int (English + Malayalam: അകം, അകത്ത്, ഉള്ളിൽ)
       if (
-        heading.includes('INT.') || heading.includes('INT ') || heading.includes('INDOOR') ||
+        /\bINT\b/.test(heading) || heading.includes('INDOOR') ||
         heading.includes('അകം') || heading.includes('അകത്ത്') || heading.includes('ഉള്ളിൽ')
       ) {
         indoor++;
-      } 
+      }
       // Check Outdoor/Ext (English + Malayalam: പുറത്ത്, പുറം)
-      else if (
-        heading.includes('EXT.') || heading.includes('EXT ') || heading.includes('OUTDOOR') ||
+      if (
+        /\bEXT\b/.test(heading) || heading.includes('OUTDOOR') ||
         heading.includes('പുറത്ത്') || heading.includes('പുറം')
       ) {
         outdoor++;

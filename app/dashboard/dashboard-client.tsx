@@ -121,6 +121,15 @@ type Props = {
   initialData: DashboardResponse;
 };
 
+function formatDate(date: Date | string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(date));
+}
+
 const projectLanguages = ["Malayalam", "English", "Hindi", "Tamil", "Telugu"];
 
 type SortOption = "newest" | "oldest" | "a-z" | "scripts";
@@ -553,7 +562,7 @@ export default function DashboardClient({
                         </div>
                         <p className="mt-1 text-[10px] font-mono text-[#8F9CAE]/75">
                           Initialized:{" "}
-                          {new Date(project.created_at).toLocaleDateString()}
+                          {formatDate(project.created_at)}
                         </p>
                       </div>
 
@@ -649,7 +658,7 @@ export default function DashboardClient({
                             {activity.title}
                           </p>
                           <span className="mt-1 block text-[10px] font-mono text-[#8F9CAE]/75">
-                            {activity.date.toLocaleDateString()}
+                            {formatDate(activity.date)}
                           </span>
                         </div>
                         <Link

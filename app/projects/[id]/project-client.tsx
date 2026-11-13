@@ -115,6 +115,16 @@ type Props = {
   user: { name: string; email: string };
 };
 
+function formatProjectDate(date: Date | string, includeTime = false): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "UTC",
+    year: "numeric",
+    ...(includeTime && { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
+  }).format(new Date(date));
+}
+
 export default function ProjectClient({ backendAccessToken, initialProject, user }: Props) {
   const router = useRouter();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -122,6 +132,7 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
 
   const [project, setProject] = useState(initialProject);
   const [busyScreenplayId, setBusyScreenplayId] = useState<string>("");
+  const [cancellingScreenplayId, setCancellingScreenplayId] = useState<string>("");
   const [busyLabel, setBusyLabel] = useState<string>("");
   const [error, setError] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -282,14 +293,14 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
         throw new Error(await responseErrorMessage(res, "Processing failed"));
       }
 
-      toast.success("Script processed successfully", { id: screenplayId });
-      router.push(`/screenplays/${screenplayId}/summary`);
+      const summary = (await res.json()) as ProcessingSummary;
+      if (summary.processing_status === "cancelled") {
+        toast.info("Script processing cancelled", { id: screenplayId });
+      } else {
+        toast.success("Script processed successfully", { id: screenplayId });
+        router.push(`/screenplays/${screenplayId}/summary`);
+      }
     } catch (e) {
-      updateScreenplay(screenplayId, {
-        processing_status: "failed",
-        processing_progress: 0,
-        processing_message: "Failed",
-      });
       toast.error(e instanceof Error ? e.message : "Unexpected error", { id: screenplayId });
     } finally {
       stopPolling();
@@ -402,17 +413,45 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
         processing_progress: summary.processing_progress,
         processing_message: summary.processing_message,
       });
-      toast.success("Script re-processed", { id: screenplayId });
+      if (summary.processing_status === "cancelled") {
+        toast.info("Script re-processing cancelled", { id: screenplayId });
+      } else {
+        toast.success("Script re-processed", { id: screenplayId });
+      }
     } catch (e) {
-      updateScreenplay(screenplayId, {
-        processing_status: "failed",
-        processing_progress: 0,
-        processing_message: "Failed",
-      });
       toast.error(e instanceof Error ? e.message : "Unexpected error", { id: screenplayId });
     } finally {
       stopPolling();
       setBusyScreenplayId("");
+    }
+  };
+
+  const cancelProcessing = async (screenplayId: string) => {
+    setCancellingScreenplayId(screenplayId);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/screenplays/${screenplayId}/cancel`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        throw new Error(await responseErrorMessage(res, "Cancellation request failed"));
+      }
+
+      const summary = (await res.json()) as ProcessingSummary;
+      updateScreenplay(screenplayId, {
+        processing_status: summary.processing_status,
+        processing_progress: summary.processing_progress,
+        processing_message: summary.processing_message,
+      });
+      toast.info("Cancellation requested. Re-processing is available once the current step stops.", {
+        id: screenplayId,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cancellation request failed", {
+        id: screenplayId,
+      });
+    } finally {
+      setCancellingScreenplayId("");
     }
   };
 
@@ -517,7 +556,7 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                     {project.screenplay_count} Script{project.screenplay_count !== 1 ? 's' : ''} Total
                   </span>
                 </div>
-                <p className="mt-2 text-[10px] font-mono text-[#8F9CAE]/75">Initialized on {new Date(project.created_at).toLocaleString()}</p>
+                <p className="mt-2 text-[10px] font-mono text-[#8F9CAE]/75">Initialized on {formatProjectDate(project.created_at, true)}</p>
               </div>
 
               {!project.is_archived && (
@@ -566,7 +605,7 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                           {screenplay.language}
                         </span>
                         <span className="text-[10px] font-mono text-[#8F9CAE]/75">
-                          Uploaded: {new Date(screenplay.created_at).toLocaleDateString()}
+                          Uploaded: {formatProjectDate(screenplay.created_at)}
                         </span>
                       </div>
                       
@@ -593,6 +632,25 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                     
                     <div className="flex items-center gap-3.5 self-end md:self-center shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
                       <div className="flex items-center gap-2">
+                        {isProcessingStatus(screenplay.processing_status) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              screenplay.processing_status === "cancel_requested" ||
+                              cancellingScreenplayId === screenplay.id
+                            }
+                            onClick={() => cancelProcessing(screenplay.id)}
+                            className="h-9 border-red-500/30 bg-red-500/10 px-3 text-red-300 hover:bg-red-500/20 hover:text-red-200"
+                          >
+                            {screenplay.processing_status === "cancel_requested"
+                              ? "Cancelling..."
+                              : cancellingScreenplayId === screenplay.id
+                                ? "Requesting..."
+                                : "Cancel"}
+                          </Button>
+                        )}
+
                         {screenplay.processing_status === "uploaded" && (
                            <Button
                              type="button"
@@ -673,7 +731,10 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
                               </button>
                               <div className="my-1.5 h-px bg-white/5" />
                               <button
-                                disabled={busyScreenplayId === screenplay.id}
+                                disabled={
+                                  busyScreenplayId === screenplay.id ||
+                                  isProcessingStatus(screenplay.processing_status)
+                                }
                                 onClick={() => {
                                   setOpenScriptMenuId(null);
                                   setConfirmAction({
@@ -752,12 +813,7 @@ export default function ProjectClient({ backendAccessToken, initialProject, user
 }
 
 function ProcessingProgress({ screenplay }: { screenplay: ScreenplaySummary }) {
-  const activeStatuses: ProcessingStatus[] = [
-    "processing", "extracting_text", "validating_text", 
-    "sample_ocr", "full_ocr", "gemini_ocr", "scene_detection",
-  ];
-
-  if (!activeStatuses.includes(screenplay.processing_status as ProcessingStatus)) return null;
+  if (!isProcessingStatus(screenplay.processing_status)) return null;
 
   const progress = Math.max(0, Math.min(100, screenplay.processing_progress));
   return (
@@ -773,10 +829,24 @@ function ProcessingProgress({ screenplay }: { screenplay: ScreenplaySummary }) {
   );
 }
 
+function isProcessingStatus(status: ProcessingStatus | "uploaded"): boolean {
+  return [
+    "processing",
+    "extracting_text",
+    "validating_text",
+    "sample_ocr",
+    "full_ocr",
+    "gemini_ocr",
+    "scene_detection",
+    "character_detection",
+    "location_detection",
+    "cancel_requested",
+  ].includes(status);
+}
+
 async function responseErrorMessage(response: Response, fallback: string) {
   if (response.status === 401 || response.status === 403) return "Unauthorized access";
   if (response.status === 404) return "Not found";
-  if (response.status === 409) return "Processing already running";
   const body = await response.json().catch(() => ({}));
   return typeof body.detail === "string" ? body.detail : fallback;
 }
